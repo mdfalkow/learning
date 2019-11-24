@@ -18,7 +18,7 @@ class LinearModel(object):
     def __init__(self,
                  X: np.ndarray,
                  y: np.ndarray,
-                 reg_const: float = 0,
+                 r: float = 0,
                  n_iter: int = 2000,
                  debug: bool = False):
         """
@@ -27,45 +27,35 @@ class LinearModel(object):
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-
             Matrix containing the training data. 
             Requires: 
                 Points should be expressed as rows.
                 Does contain dummy/bias feature (model does this).
 
         y : numpy.ndarray (1 dimensional)
-
             Labels for training data. 
             Requires:
                 Length should match X
 
-        reg_const : float, optional
-
-            Regularization constant (default: 0).
+        r : float, optional
+            Regularization coefficient (default: 0).
 
         n_iter : int, optional
-
             Number of training iterations (default: 2000).
 
         debug : bool, optional
-
             Prints out training information if True (default: False).
 
         Raises
         ------
         Value error
-
             - If argument dimensions do not match.
-
             - If X is not 2 dimensional.
-
             - If y is not 1 dimensional.
-
             - If the first column of X is 
         """
-        self.y = np.array(y, dtype='float')
-        self.X = np.column_stack(
-            (np.ones_like(len(X), dtype='float'), np.array(X, dtype='float')))
+        y = np.asfarray(y)
+        X = np.asfarray(np.column_stack((np.ones_like(len(X)), np.array(X))))
 
         if len(X.shape) != 2:
             raise ValueError(
@@ -77,65 +67,65 @@ class LinearModel(object):
             raise ValueError(
                 f'Number of points does not match. len(X) ({len(X)}) != len(y) ({len(y)})')
 
-        self.reg_const = reg_const
+        self.w = self.__train_model(X, y, r)
 
-        self.n_iter = n_iter
-        self.debug = debug
-
-        self.w = self.__calc_w_lin()
-
-    def __train_model(self):
+    def __train_model(self,
+                      X: np.ndarray,
+                      y: np.ndarray,
+                      r: float):
         """
         Train model on provided data using Linear regression then pocket 
         perceptron learning algorithm for improvement. 
         """
-        E_ = self.__calc_E_in(self.w)
-        w_, w = np.copy(self.w), np.copy(self.w)
+        w_ = self.__calc_w_lin(X, y, r)
+        E_ = self.__calc_E_in(w_, r)
+        w = np.copy(self.w_)
         for t in range(self.n_iter):
             while True:
                 i = random.randint(0, len(X) - 1)  # pick random point
-                pred = self.classify[w, self]
+                pred = self.__classify(X[i], w)
                 if pred != y:
                     # Update w and E_in
-                    w += y * x
+                    w += y[i] * X[i]
+                    E_in = self.__calc_E_in(w, r)
                     if E_in < E_:
                         E_ = E_in
                         np.copyto(w_, w)
                     break
         return w_
 
-    def __calc_w_lin(self):
+    def __calc_w_lin(self, X: np.ndarray, y: np.ndarray, r: float):
         """
         Get w_lin, the weight vector from linear regression
         """
-        n = self.X.shape[1]
-        return (np.linalg.inv((self.X.T @ self.X) +
-                              reg_const * np.eye(n)) @ self.X.T) @ self.y
-        # try:
-        #     Xdag = np.linalg.inv(XtX + reg_const * np.identity(len(XtX))) @ Xt
-        # except np.linalg.LinAlgError:
-        #     Xdag = np.linalg.pinv(XtX + reg_const * np.identity(len(XtX))) @ Xt
-        # return Xdag @ labels
+        n = X.shape[1]
+        return (np.linalg.inv((X.T @ X) + r * np.eye(n)) @ X.T) @ y
 
-    def __calc_E_in(self, w):
+    def __calc_E_in(self,
+                    X: np.ndarray,
+                    y: np.ndarray,
+                    w: np.ndarray,
+                    r: float):
         """
         Calculate in-sample error for specified weight vector
         """
-        return np.sum(np.abs(np.sign(self.X @ w) - self.y))
+        pred = np.sign(X @ w)
+        pred[pred == 0] = 1
+        return np.sum(np.abs(pred - y)) + r * (w @ w)
 
-    def classify(self, x):
-        """
-        Returns the classification of x using the weight vector w associated 
-        with this model. 
-
-        Returns 1 if sign(w @ x) >= 0 else -1
-        """
-        return self.classify(x, self.w)
-
-    def classify(self, x, w):
+    def __classify(self, x, w):
         """
         Returns the classification of x using provided the vector w
 
         Returns 1 if sign(w @ x) >= 0 else -1
         """
         return 1 if np.sign(np.dot(x, w)) >= 0 else -1
+
+    @staticmethod
+    def classify(x):
+        """
+        Returns the classification of x using the weight vector w of this model. 
+
+        Returns 1 if sign(w @ x) >= 0 else -1
+        """
+        return self.__classify(x, self.w)
