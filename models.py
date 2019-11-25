@@ -2,15 +2,65 @@ import math
 import random
 
 import numpy as np
+from time import time
 
 
-class LinearModel(object):
+class BaseModel(object):
+    """
+    BaseModel class definition. All models inherit from this class.
+
+    Attributes
+    ----------
+    X : numpy.ndarray (2 dimensional)
+        Matrix containing [training] data. (Points expressed as rows)
+
+    y : numpy.ndarray (1 dimensional)
+        Labels for [training] data. 
+    """
+
+    def __init__(self, X, y):
+        """
+        X : numpy.ndarray (2 dimensional)
+            Matrix containing the training data. 
+            Requires: 
+                Points should be expressed as rows.
+                Does contain dummy/bias feature (model does this).
+
+        y : numpy.ndarray (1 dimensional)
+            Labels for training data. 
+            Requires:
+                Length should match X
+
+        Value error
+            - If argument dimensions do not match.
+            - If X is not 2 dimensional.
+            - If y is not 1 dimensional.
+            - If the first column of X is a dummy feature *WIP*
+        """
+        X = np.asfarray(X)
+        y = np.asfarray(X)
+
+        if len(X.shape) != 2:
+            raise ValueError(
+                f'{X.shape} is invalid shape for X. Should be 2-dimensional.')
+        if len(y.shape) != 1:
+            raise ValueError(
+                f'{y.shape} is invalid shape for y. Should be 1-dimensional.')
+        if len(X) == len(y):
+            raise ValueError(
+                f'Unequal dimensions. len(X) ({len(X)}) != len(y) ({len(y)})')
+
+        self.X = X
+        self.y = y
+
+
+class LinearModel(BaseModel):
     """
     Implementation of the linear model for classification.
     Uses perceptron learning algorithm with pocket for training.
 
     Attributes:
-    -----------------
+    -----------
     w : numpy.ndarray
         weight vector of the model
     """
@@ -52,60 +102,54 @@ class LinearModel(object):
             - If argument dimensions do not match.
             - If X is not 2 dimensional.
             - If y is not 1 dimensional.
-            - If the first column of X is 
+            - If the first column of X is a dummy feature *WIP*
         """
-        y = np.asfarray(y)
-        X = np.asfarray(np.column_stack((np.ones_like(len(X)), np.array(X))))
+        super().__init__(X, y)
 
-        if len(X.shape) != 2:
-            raise ValueError(
-                f'{X.shape} is invalid shape for X. Should be 2-dimensional.')
-        if len(y.shape) != 1:
-            raise ValueError(
-                f'{y.shape} is invalid shape for y. Should be 1-dimensional.')
-        if len(X) == len(y):
-            raise ValueError(
-                f'Number of points does not match. len(X) ({len(X)}) != len(y) ({len(y)})')
-
-        self.w = self.__train_model(X, y, r)
+        self.X = np.asfarray(np.column_stack(
+            (np.ones_like(self.X.shape[0]), self.X)))
+        self.w = self.__train_model(r, n_iter, debug)
 
     def __train_model(self,
-                      X: np.ndarray,
-                      y: np.ndarray,
-                      r: float):
+                      r: float,
+                      n_iter: int,
+                      debug: bool):
         """
         Train model on provided data using Linear regression then pocket 
         perceptron learning algorithm for improvement. 
         """
-        w_ = self.__calc_w_lin(X, y, r)
+        w_ = self.__calc_w_lin(r)
         E_ = self.__calc_E_in(w_, r)
+        if debug:
+            print(f'{time()} -- t: 0 -- (w_, E_): {(w_, E_)}')
         w = np.copy(self.w_)
-        for t in range(self.n_iter):
+        for t in range(n_iter):
+            if debug:
+                print(f'{time()} -- t: {t + 1} -- (w_, E_): {(w_, E_)}')
             while True:
-                i = random.randint(0, len(X) - 1)  # pick random point
-                pred = self.__classify(X[i], w)
-                if pred != y:
+                i = random.randint(0, len(self.X) - 1)  # pick random point
+                pred = self.__classify(self.X[i], w)
+                if pred != self.y[i]:
                     # Update w and E_in
-                    w += y[i] * X[i]
+                    w += self.y[i] * self.X[i]
                     E_in = self.__calc_E_in(w, r)
                     if E_in < E_:
                         E_ = E_in
                         np.copyto(w_, w)
                     break
+        if debug:
+            print(f'{time()} -- t: {n_iter} -- Best Results: (w_, E_): {(w_, E_)}')
+
         return w_
 
-    def __calc_w_lin(self, X: np.ndarray, y: np.ndarray, r: float):
+    def __calc_w_lin(self, r: float):
         """
         Get w_lin, the weight vector from linear regression
         """
-        n = X.shape[1]
-        return (np.linalg.inv((X.T @ X) + r * np.eye(n)) @ X.T) @ y
+        n = self.X.shape[1]
+        return (np.linalg.inv((self.X.T @ self.X) + r * np.eye(n)) @ self.X.T) @ self.y
 
-    def __calc_E_in(self,
-                    X: np.ndarray,
-                    y: np.ndarray,
-                    w: np.ndarray,
-                    r: float):
+    def __calc_E_in(self, w: np.ndarray, r: float):
         """
         Calculate in-sample error for specified weight vector
         """
