@@ -1,8 +1,10 @@
 import math
 import random
+from time import time
 
 import numpy as np
-from time import time
+
+import typing
 
 
 class BaseModel(object):
@@ -14,10 +16,12 @@ class BaseModel(object):
     X : numpy.ndarray (2 dimensional)
         Matrix containing data used to build the model
     y : numpy.ndarray (1 dimensional)
-        Vector containing labels for data points in X. 
+        Vector containing labels for data points in X.
+    feat_trans: Callable[numpy.ndarray] 
+        Feature transformation function on an individual point.
     """
 
-    def __init__(self, X, y):
+    def __init__(self, X, y, feat_trans=None):
         """
         Create a new BaseModel.        
 
@@ -26,7 +30,11 @@ class BaseModel(object):
         X : numpy.ndarray (2 dimensional)
             Matrix containing the training data. 
         y : numpy.ndarray (1 dimensional)
-            Labels for training data. 
+            Labels for training data.
+        feat_trans: Callable[[numpy.ndarray], numpy.ndarray], optional
+            Feature transformation function on an individual point. 
+            Should return a new point. 
+            (Default: None, implies no feature transformation)
 
         Raises
         ------
@@ -34,10 +42,10 @@ class BaseModel(object):
             - If argument dimensions do not match.
             - If X is not 2 dimensional.
             - If y is not 1 dimensional.
-            - If the first column of X is a dummy feature *WIP*
+            - If the first column of X is a dummy feature. *WIP*
         """
-        X = np.asfarray(X)
-        y = np.asfarray(X)
+        X = np.array(X, dtype='float')
+        y = np.array(y, dtype='float')
 
         if len(X.shape) != 2:
             raise ValueError(
@@ -49,8 +57,12 @@ class BaseModel(object):
             raise ValueError(
                 f'Unequal dimensions. len(X) ({len(X)}) != len(y) ({len(y)})')
 
+        if feat_trans != None:
+            X = np.array([feat_trans(x) for x in X], dtype='float')
+
         self.X = X
         self.y = y
+        self.feat_trans = feat_trans
 
 
 class LinearModel(BaseModel):
@@ -62,19 +74,17 @@ class LinearModel(BaseModel):
     X : numpy.ndarray (2 dimensional)
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
-        Vector containing labels for data points in X. 
+        Vector containing labels for data points in X.
+    feat_trans: Callable[numpy.ndarray] 
+        Feature transformation function on an individual point.
     w : numpy.ndarray
         Weight vector of the model.
     r : float
         Regularization coefficient for the model.
     """
 
-    def __init__(self,
-                 X: np.ndarray,
-                 y: np.ndarray,
-                 r: float = 0,
-                 n_iter: int = 2000,
-                 debug: bool = False):
+    def __init__(self, X: np.ndarray, y: np.ndarray,
+                 r: float = 0, n_iter: int = 2000, debug: bool = False):
         """
         Create a new LinearModel.
 
@@ -107,7 +117,7 @@ class LinearModel(BaseModel):
 
         self.w = self._train_model()
 
-    def _train_model(self):
+    def _train_model(self) -> np.ndarray:
         """
         Train model on provided data using Linear regression then pocket 
         perceptron learning algorithm for improvement. 
@@ -115,7 +125,7 @@ class LinearModel(BaseModel):
         Returns
         -------
         numpy.ndarray
-            The weight vector resulting from training
+            The weight vector resulting from training.
         """
         w_ = self._calc_w_lin()
         E_ = self._calc_E_in(w_)
@@ -129,9 +139,9 @@ class LinearModel(BaseModel):
             if debug:
                 debug(t)
             while True:
-                # pick random point
+                # pick random point and classify
                 i = random.randint(0, len(self.X) - 1)
-                if self.classify(self.X[i], w) != self.y[i]:
+                if self._classify(self.X[i], w) != self.y[i]:
                     # Update w and E_in
                     w += self.y[i] * self.X[i]
                     E_in = self._calc_E_in(w)
@@ -144,9 +154,9 @@ class LinearModel(BaseModel):
 
         return w_
 
-    def _calc_w_lin(self):
+    def _calc_w_lin(self) -> np.ndarray:
         """
-        Calculate w_lin, the weight vector from linear regression
+        Calculate w_lin, the weight vector from linear regression.
 
         Returns
         -------
@@ -159,7 +169,7 @@ class LinearModel(BaseModel):
 
     def _calc_E_in(self, w: np.ndarray = None) -> float:
         """
-        Calculate in-sample error for specified weight vector
+        Calculate in-sample error for specified weight vector.
 
         Parameters
         ----------
@@ -178,9 +188,10 @@ class LinearModel(BaseModel):
         pred[pred < 0] = -1
         return np.sum(np.abs(pred - self.y)) + self.r * (w @ w)
 
-    def classify(self, x: np.ndarray, w: np.ndarray = None) -> int:
+    def _classify(self, x, w) -> int:
         """
-        Classifies x using the weight vector w. 
+        Classifies x using the weight vector w.
+        Assumes x has already gone through feature transformation.
 
         Parameters
         ----------
@@ -193,10 +204,40 @@ class LinearModel(BaseModel):
         Returns
         -------
         int 
-             1 if `np.dot(x, w)` >= 0
-            -1 otherwise
+             1 if `np.dot(x, w)` >= 0; -1 otherwise.
         """
         return 1 if np.dot(x, w) >= 0 else -1
+
+    def classify(self, x: np.ndarray, w: np.ndarray = None) -> int:
+        """
+        Classifies x using the weight vector w. 
+        Will perform feature transformation on x if self.feat_trans != None.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Point to classify
+        w : numpy.ndarray, optional
+            Weight vector to use for classification
+            (Default: None, uses model's weight vector)
+
+        Raises
+        ------
+        ValueError
+            If feature transformation fails.
+
+        Returns
+        -------
+        int 
+             1 if `np.dot(x, w)` >= 0; -1 otherwise.
+        """
+        # feature transformation
+        if self.feat_trans != None:
+            try:
+                x = self.feat_trans(x)
+            except e:
+                raise ValueError(f'Feature transform failed\n{e}')
+        return self._classify(x, w)
 
 
 class kNNModel(BaseModel):
@@ -208,9 +249,11 @@ class kNNModel(BaseModel):
     X : numpy.ndarray (2 dimensional)
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
-        Vector containing labels for data points in X. 
+        Vector containing labels for data points in X.
+    feat_trans: Callable[numpy.ndarray] 
+        Feature transformation function on an individual point.
     k : int
-        Number of nearest neighbors to check
+        Number of nearest neighbors to check.
     """
 
     def __init__(self, X: np.ndarray, y: np.ndarray, k: int = 1):
@@ -220,7 +263,7 @@ class kNNModel(BaseModel):
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing data used to build the model
+            Matrix containing data used to build the model.
         y : numpy.ndarray (1 dimensional)
             Vector containing labels for data points in X. 
         k : int, optional
@@ -235,16 +278,16 @@ class kNNModel(BaseModel):
         self.k = k
 
     @staticmethod
-    def _euclidean_distance(x1, x2) -> float:
+    def _euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
         """
-        Returns distance between two points
+        Returns distance between two points.
 
         Parameters
         ----------
         x1 : numpy.ndarray
-            First point
+            First point.
         x2 : numpy.ndarray
-            Second point
+            Second point.
 
         Returns
         -------
@@ -260,22 +303,34 @@ class kNNModel(BaseModel):
         Parameters
         ----------
         x : numpy.ndarray
-            Point to classify
+            Point to classify.
         k : int, optional
-            Number of nearest neighbors to check 
+            Number of nearest neighbors to check.
             (Default: None, uses model's k attribute).
+
+        Raises
+        ------
+        ValueError
+            If feature transformation fails.
 
         Returns
         -------
         int 
-             1 if the k-nearest neighbors have labels >= 0
-            -1 otherwise
+             1 if the k-nearest neighbors have labels >= 0; -1 otherwise.
         """
         # use provided, otherwise use default
         k = k if k != None else self.k
 
+        # feature transformation
+        if self.feat_trans != None:
+            try:
+                x = self.feat_trans(x)
+            except e:
+                raise ValueError(f'Feature transform failed\n{e}')
+
         # get distance to each point in X, then sort
-        distances = sorted((distance(x0, X[i]), y[i]) for i in range(len(X)))
+        distances = sorted((self._euclidean_distance(x0, self.X[i]), self.y[i])
+                           for i in range(len(self.X)))
 
         # get k nearest neighbors, then take the sum of the labels
         nearest_neighbors = distances[:k]
