@@ -173,3 +173,57 @@ class LinearModel(BaseModel):
         Returns 1 if sign(w @ x) >= 0 else -1
         """
         return self.__classify(x, self.w)
+
+
+class kNNModel(BaseModel):
+    """
+    Implementation of the k-Nearest Neighbors model for classification.
+
+    Attributes:
+    -----------
+    X : numpy.ndarray (2 dimensional)
+        Matrix containing data points, each point expressed as a row.
+    y : numpy.ndarray (1 dimensional)
+        Labels for each data point. 
+        The i-th element corresponds to the i-th point in X.
+    """
+
+    def __init__(self, X: np.ndarray, y: np.ndarray):
+        """
+        Create a new kNNModel
+
+        Parameters
+        ----------
+        X : numpy.ndarray (2 dimensional)
+            Matrix containing data points, each point expressed as a row.
+            Requires:
+                Points expressed as rows.
+                Does contain dummy/bias feature (model does this).
+
+        y : numpy.ndarray (1 dimensional)
+            Labels for each data point. 
+            The i-th element corresponds to the i-th point in X.
+            Requires:
+
+        Raises
+        ------
+        Value error
+            - If argument dimensions do not match.
+            - If X is not 2 dimensional.
+            - If y is not 1 dimensional.
+            - If the first column of X is a dummy feature *WIP*
+
+        """
+        super().__init__(X, y)
+
+    @staticmethod
+    def __euclidean_distance(x1, x2) -> float:
+        """Returns distance between two points"""
+        return np.linalg.norm(x1 - x2)
+
+    def classify(self, x: np.ndarray):
+        """"""
+        min_dist, min_i = self.__euclidean_distance(x, self.X[0]), 0
+        for i in range(1, len(self.X)):
+            min_dist, min_i = min((min_dist, min_i),
+                                  (self.__euclidean_distance(x, self.X[i])))
