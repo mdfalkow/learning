@@ -53,7 +53,7 @@ class BaseModel(object):
         if len(y.shape) != 1:
             raise ValueError(
                 f'{y.shape} is invalid shape for y. Should be 1-dimensional.')
-        if len(X) == len(y):
+        if len(X) != len(y):
             raise ValueError(
                 f'Unequal dimensions. len(X) ({len(X)}) != len(y) ({len(y)})')
 
@@ -329,7 +329,7 @@ class kNNModel(BaseModel):
                 raise ValueError(f'Feature transform failed\n{e}')
 
         # get distance to each point in X, then sort
-        distances = sorted((self._euclidean_distance(x0, self.X[i]), self.y[i])
+        distances = sorted((self._euclidean_distance(x, self.X[i]), self.y[i])
                            for i in range(len(self.X)))
 
         # get k nearest neighbors, then take the sum of the labels
