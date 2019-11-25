@@ -186,9 +186,11 @@ class kNNModel(BaseModel):
     y : numpy.ndarray (1 dimensional)
         Labels for each data point. 
         The i-th element corresponds to the i-th point in X.
+    k : int
+        Number of nearest neighbors to check
     """
 
-    def __init__(self, X: np.ndarray, y: np.ndarray):
+    def __init__(self, X: np.ndarray, y: np.ndarray, k: int = 1):
         """
         Create a new kNNModel
 
@@ -204,6 +206,10 @@ class kNNModel(BaseModel):
             Labels for each data point. 
             The i-th element corresponds to the i-th point in X.
             Requires:
+                Length should match X
+
+        k : int, optional
+            Number of nearest neighbors to check (Default : 1)
 
         Raises
         ------
@@ -215,15 +221,22 @@ class kNNModel(BaseModel):
 
         """
         super().__init__(X, y)
+        self.k = k
 
     @staticmethod
     def __euclidean_distance(x1, x2) -> float:
-        """Returns distance between two points"""
+        """
+        Returns distance between two points
+        """
         return np.linalg.norm(x1 - x2)
 
     def classify(self, x: np.ndarray):
-        """"""
-        min_dist, min_i = self.__euclidean_distance(x, self.X[0]), 0
-        for i in range(1, len(self.X)):
-            min_dist, min_i = min((min_dist, min_i),
-                                  (self.__euclidean_distance(x, self.X[i])))
+        """
+        Classify the point x based on its k-nearest neighbors.
+        """
+        # get distance to each point in X, then sort
+        distances = sorted((distance(x0, X[i]), y[i]) for i in range(len(X)))
+
+        # get k nearest neighbors, then take the sum of the labels
+        nearest_neighbors = distances[:k]
+        return sum(label for distance, label in nearest_neighbors)
