@@ -12,26 +12,25 @@ class BaseModel(object):
     Attributes
     ----------
     X : numpy.ndarray (2 dimensional)
-        Matrix containing [training] data. (Points expressed as rows)
-
+        Matrix containing data used to build the model
     y : numpy.ndarray (1 dimensional)
-        Labels for [training] data. 
+        Vector containing labels for data points in X. 
     """
 
     def __init__(self, X, y):
         """
+        Create a new BaseModel.        
+
+        Parameters
+        ----------
         X : numpy.ndarray (2 dimensional)
             Matrix containing the training data. 
-            Requires: 
-                Points should be expressed as rows.
-                Does contain dummy/bias feature (model does this).
-
         y : numpy.ndarray (1 dimensional)
             Labels for training data. 
-            Requires:
-                Length should match X
 
-        Value error
+        Raises
+        ------
+        ValueError
             - If argument dimensions do not match.
             - If X is not 2 dimensional.
             - If y is not 1 dimensional.
@@ -57,12 +56,17 @@ class BaseModel(object):
 class LinearModel(BaseModel):
     """
     Implementation of the linear model for classification.
-    Uses perceptron learning algorithm with pocket for training.
 
-    Attributes:
-    -----------
+    Attributes
+    ----------
+    X : numpy.ndarray (2 dimensional)
+        Matrix containing data used to build the model.
+    y : numpy.ndarray (1 dimensional)
+        Vector containing labels for data points in X. 
     w : numpy.ndarray
-        weight vector of the model
+        Weight vector of the model.
+    r : float
+        Regularization coefficient for the model.
     """
 
     def __init__(self,
@@ -72,46 +76,34 @@ class LinearModel(BaseModel):
                  n_iter: int = 2000,
                  debug: bool = False):
         """
-        Create a new LinearModel
+        Create a new LinearModel.
 
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
             Matrix containing the training data. 
-            Requires: 
-                Points should be expressed as rows.
-                Does contain dummy/bias feature (model does this).
-
         y : numpy.ndarray (1 dimensional)
             Labels for training data. 
-            Requires:
-                Length should match X
-
         r : float, optional
             Regularization coefficient (default: 0).
-
         n_iter : int, optional
             Number of training iterations (default: 2000).
-
         debug : bool, optional
             Prints out training information if True (default: False).
 
         Raises
         ------
-        Value error
-            - If argument dimensions do not match.
-            - If X is not 2 dimensional.
-            - If y is not 1 dimensional.
-            - If the first column of X is a dummy feature *WIP*
+        ValueError
+            If conditions for BaseModel are not met.
         """
         super().__init__(X, y)
 
         self.X = np.asfarray(np.column_stack(
             (np.ones_like(self.X.shape[0]), self.X)))
-        self.w = self.__train_model(r, n_iter, debug)
+        self.r = r
+        self.w = self.__train_model(n_iter, debug)
 
     def __train_model(self,
-                      r: float,
                       n_iter: int,
                       debug: bool):
         """
@@ -142,26 +134,42 @@ class LinearModel(BaseModel):
 
         return w_
 
-    def __calc_w_lin(self, r: float):
+    def __calc_w_lin(self):
         """
         Get w_lin, the weight vector from linear regression
+
+        Parameters
+        ----------
+        r : float
+            Regularization coefficient
+
         """
         n = self.X.shape[1]
-        return (np.linalg.inv((self.X.T @ self.X) + r * np.eye(n)) @ self.X.T) @ self.y
+        return (np.linalg.inv((self.X.T @ self.X) +
+                              self.r * np.eye(n)) @ self.X.T) @ self.y
 
     def __calc_E_in(self, w: np.ndarray, r: float):
         """
         Calculate in-sample error for specified weight vector
+
+        Parameters
+        ----------
+        w : numpy.ndarray
+
         """
-        pred = np.sign(X @ w)
+        pred = np.sign(self.X @ w)
         pred[pred == 0] = 1
-        return np.sum(np.abs(pred - y)) + r * (w @ w)
+        return np.sum(np.abs(pred - self.y)) + self.r * (w @ w)
 
     def __classify(self, x, w):
         """
         Returns the classification of x using provided the vector w
 
-        Returns 1 if sign(w @ x) >= 0 else -1
+        Returns
+        -------
+        int 
+             1 if `np.dot(x, w)` >= 0
+            -1 otherwise
         """
         return 1 if np.sign(np.dot(x, w)) >= 0 else -1
 
@@ -170,7 +178,16 @@ class LinearModel(BaseModel):
         """
         Returns the classification of x using the weight vector w of this model. 
 
-        Returns 1 if sign(w @ x) >= 0 else -1
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Point to classify
+
+        Returns
+        -------
+        int 
+             1 if `np.dot(x, w)` >= 0
+            -1 otherwise
         """
         return self.__classify(x, self.w)
 
@@ -179,13 +196,12 @@ class kNNModel(BaseModel):
     """
     Implementation of the k-Nearest Neighbors model for classification.
 
-    Attributes:
-    -----------
+    Attributes
+    ----------
     X : numpy.ndarray (2 dimensional)
-        Matrix containing data points, each point expressed as a row.
+        Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
-        Labels for each data point. 
-        The i-th element corresponds to the i-th point in X.
+        Vector containing labels for data points in X. 
     k : int
         Number of nearest neighbors to check
     """
@@ -197,28 +213,16 @@ class kNNModel(BaseModel):
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing data points, each point expressed as a row.
-            Requires:
-                Points expressed as rows.
-                Does contain dummy/bias feature (model does this).
-
+            Matrix containing data used to build the model
         y : numpy.ndarray (1 dimensional)
-            Labels for each data point. 
-            The i-th element corresponds to the i-th point in X.
-            Requires:
-                Length should match X
-
+            Vector containing labels for data points in X. 
         k : int, optional
             Number of nearest neighbors to check (Default : 1)
 
         Raises
         ------
-        Value error
-            - If argument dimensions do not match.
-            - If X is not 2 dimensional.
-            - If y is not 1 dimensional.
-            - If the first column of X is a dummy feature *WIP*
-
+        ValueError
+            If conditions for BaseModel are not met.
         """
         super().__init__(X, y)
         self.k = k
@@ -227,13 +231,42 @@ class kNNModel(BaseModel):
     def __euclidean_distance(x1, x2) -> float:
         """
         Returns distance between two points
+
+        Parameters
+        ----------
+            x1 : numpy.ndarray
+                First point
+            x2 : numpy.ndarray
+                Second point
+
+        Returns
+        -------
+        float
+            Euclidean distance between x1 and x2.
         """
         return np.linalg.norm(x1 - x2)
 
-    def classify(self, x: np.ndarray):
+    def classify(self, x: np.ndarray, k: int = None) -> int:
         """
-        Classify the point x based on its k-nearest neighbors.
+        Classify a point based on the k-nearest neighbors.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            Point to classify
+        k : int, optional
+            Number of nearest neighbors to check 
+            (Default: None, model uses attribute k).
+
+        Returns
+        -------
+        int 
+             1 if the k-nearest neighbors have labels >= 0
+            -1 otherwise
         """
+        # use provided, otherwise use default
+        k = k if k != None else self.k
+
         # get distance to each point in X, then sort
         distances = sorted((distance(x0, X[i]), y[i]) for i in range(len(X)))
 
