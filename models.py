@@ -17,23 +17,23 @@ class BaseModel(object):
         Matrix containing data used to build the model
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
-    feat_trans: Callable[numpy.ndarray] 
+    feat_trans: Callable[numpy.ndarray]
         Feature transformation function on an individual point.
     """
 
     def __init__(self, X, y, feat_trans=None):
         """
-        Create a new BaseModel.        
+        Create a new BaseModel.
 
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing the training data. 
+            Matrix containing the training data.
         y : numpy.ndarray (1 dimensional)
             Labels for training data.
         feat_trans: Callable[[numpy.ndarray], numpy.ndarray], optional
-            Feature transformation function on an individual point. 
-            Should return a new point. 
+            Feature transformation function on an individual point.
+            Should return a new point.
             (Default: None, implies no feature transformation)
 
         Raises
@@ -75,7 +75,7 @@ class LinearModel(BaseModel):
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
-    feat_trans: Callable[numpy.ndarray] 
+    feat_trans: Callable[numpy.ndarray]
         Feature transformation function on an individual point.
     w : numpy.ndarray
         Weight vector of the model.
@@ -91,9 +91,9 @@ class LinearModel(BaseModel):
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing the training data. 
+            Matrix containing the training data.
         y : numpy.ndarray (1 dimensional)
-            Labels for training data. 
+            Labels for training data.
         r : float, optional
             Regularization coefficient (default: 0).
         n_iter : int, optional
@@ -119,8 +119,8 @@ class LinearModel(BaseModel):
 
     def _train_model(self) -> np.ndarray:
         """
-        Train model on provided data using Linear regression then pocket 
-        perceptron learning algorithm for improvement. 
+        Train model on provided data using Linear regression then pocket
+        perceptron learning algorithm for improvement.
 
         Returns
         -------
@@ -186,7 +186,7 @@ class LinearModel(BaseModel):
         pred = self.X @ w
         pred[pred >= 0] = 1
         pred[pred < 0] = -1
-        return np.sum(np.abs(pred - self.y)) + self.r * (w @ w)
+        return np.sum(np.abs(pred - self.y) / 2) + self.r * (w @ w)
 
     def _classify(self, x, w) -> int:
         """
@@ -203,14 +203,14 @@ class LinearModel(BaseModel):
 
         Returns
         -------
-        int 
+        int
              1 if `np.dot(x, w)` >= 0; -1 otherwise.
         """
         return 1 if np.dot(x, w) >= 0 else -1
 
     def classify(self, x: np.ndarray, w: np.ndarray = None) -> int:
         """
-        Classifies x using the weight vector w. 
+        Classifies x using the weight vector w.
         Will perform feature transformation on x if self.feat_trans != None.
 
         Parameters
@@ -228,7 +228,7 @@ class LinearModel(BaseModel):
 
         Returns
         -------
-        int 
+        int
              1 if `np.dot(x, w)` >= 0; -1 otherwise.
         """
         # feature transformation
@@ -250,7 +250,7 @@ class kNNModel(BaseModel):
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
-    feat_trans: Callable[numpy.ndarray] 
+    feat_trans: Callable[numpy.ndarray]
         Feature transformation function on an individual point.
     k : int
         Number of nearest neighbors to check.
@@ -265,7 +265,7 @@ class kNNModel(BaseModel):
         X : numpy.ndarray (2 dimensional)
             Matrix containing data used to build the model.
         y : numpy.ndarray (1 dimensional)
-            Vector containing labels for data points in X. 
+            Vector containing labels for data points in X.
         k : int, optional
             Number of nearest neighbors to check (Default : 1)
 
@@ -315,7 +315,7 @@ class kNNModel(BaseModel):
 
         Returns
         -------
-        int 
+        int
              1 if the k-nearest neighbors have labels >= 0; -1 otherwise.
         """
         # use provided, otherwise use default
@@ -334,4 +334,53 @@ class kNNModel(BaseModel):
 
         # get k nearest neighbors, then take the sum of the labels
         nearest_neighbors = distances[:k]
-        return sum(label for distance, label in nearest_neighbors)
+        return 1 if sum(label for _, label in nearest_neighbors) >= 0 else -1
+
+    def classify_all(self, X: np.ndarray, k: int = None):
+        """
+        Classify a collection point based on their k-nearest neighbors.
+
+        Parameters
+        ----------
+        X : numpy.ndarray (2-dimensional)
+            Dataset to classify.
+        k : int, optional
+            Number of nearest neighbors to check.
+            (Default: None, uses model's k attribute).
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of labels corresponding to the points in X_
+        """
+        # use provided, otherwise use default
+        k = k if k != None else self.k
+
+        # classify all and return
+        return np.array([self.classify(x, k) for x in X])
+
+    def classification_error(self, X: np.ndarray, y: np.ndarray, k: int = None):
+        """
+        Classify a collection point based on their k-nearest neighbors.
+
+        Parameters
+        ----------
+        X : numpy.ndarray (2-dimensional)
+            Dataset to classify.
+        y : numpy.ndarray (1-dimensional)
+            Expected labels for X.
+        k : int, optional
+            Number of nearest neighbors to check.
+            (Default: None, uses model's k attribute).
+
+        Returns
+        -------
+        float:
+            Total classification error by the model for the points in X
+        """
+        # use provided, otherwise use default
+        k = k if k != None else self.k
+
+        # classify all points
+        predictions = self.classify_all(X, k)
+        return np.sum(np.abs(predictions - y)/2) / len(y)
