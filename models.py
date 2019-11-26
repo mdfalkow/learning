@@ -14,11 +14,11 @@ class BaseModel(object):
     Attributes
     ----------
     X : numpy.ndarray (2 dimensional)
-        Matrix containing data used to build the model
+        Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
     feat_trans: Callable[numpy.ndarray]
-        Feature transformation function on an individual point.
+        Feature transformation function on an individual point. 
     """
 
     def __init__(self, X, y, feat_trans=None):
@@ -28,12 +28,11 @@ class BaseModel(object):
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing the training data.
+            Matrix containing data used to build the model.
         y : numpy.ndarray (1 dimensional)
-            Labels for training data.
+            Vector containing labels for data points in X.
         feat_trans: Callable[[numpy.ndarray], numpy.ndarray], optional
             Feature transformation function on an individual point.
-            Should return a new point.
             (Default: None, implies no feature transformation)
 
         Raises
@@ -42,6 +41,7 @@ class BaseModel(object):
             - If argument dimensions do not match.
             - If X is not 2 dimensional.
             - If y is not 1 dimensional.
+            - If feature transformation fails.
             - If the first column of X is a dummy feature. *WIP*
         """
         X = np.array(X, dtype='float')
@@ -58,7 +58,10 @@ class BaseModel(object):
                 f'Unequal dimensions. len(X) ({len(X)}) != len(y) ({len(y)})')
 
         if feat_trans != None:
-            X = np.array([feat_trans(x) for x in X], dtype='float')
+            try:
+                X = np.array([feat_trans(x) for x in X], dtype='float')
+            except e:
+                raise ValueError(f'Feature transform failed\n{e}')
 
         self.X = X
         self.y = y
@@ -83,21 +86,29 @@ class LinearModel(BaseModel):
         Regularization coefficient for the model.
     """
 
-    def __init__(self, X: np.ndarray, y: np.ndarray,
-                 r: float = 0, n_iter: int = 2000, debug: bool = False):
+    def __init__(self,
+                 X: np.ndarray,
+                 y: np.ndarray,
+                 r: float = 0,
+                 feat_trans: Callable[[numpy.ndarray], numpy.ndarray] = None,
+                 n_iter: int = 2000,
+                 debug: bool = False):
         """
         Create a new LinearModel.
 
         Parameters
         ----------
         X : numpy.ndarray (2 dimensional)
-            Matrix containing the training data.
+            Matrix containing the training data. 
         y : numpy.ndarray (1 dimensional)
             Labels for training data.
         r : float, optional
-            Regularization coefficient (default: 0).
+            Regularization coefficient (Default: 0).
+        feat_trans: Callable[[numpy.ndarray], numpy.ndarray], optional
+            Feature transformation function on an individual point.
+            (Default: None)
         n_iter : int, optional
-            Number of training iterations (default: 2000).
+            Number of training iterations (Default: 2000).
         debug : bool, optional
             Prints out training information if True (default: False).
 
@@ -106,7 +117,7 @@ class LinearModel(BaseModel):
         ValueError
             If conditions for BaseModel are not met.
         """
-        super().__init__(X, y)
+        super().__init__(X, y, feat_trans)
 
         self.X = np.asfarray(np.column_stack(
             (np.ones_like(self.X.shape[0]), self.X)))
@@ -164,7 +175,7 @@ class LinearModel(BaseModel):
             The weight vector from determined by linear regression.
         """
         n = self.X.shape[1]
-        return (np.linalg.pinv((self.X.T @ self.X) +
+        return (np.linalg.inv((self.X.T @ self.X) +
                                self.r * np.eye(n)) @ self.X.T) @ self.y
 
     def _calc_E_in(self, w: np.ndarray = None) -> float:
