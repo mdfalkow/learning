@@ -165,7 +165,7 @@ class LinearModel(BaseModel):
         """
         n = self.X.shape[1]
         return (np.linalg.pinv((self.X.T @ self.X) +
-                              self.r * np.eye(n)) @ self.X.T) @ self.y
+                               self.r * np.eye(n)) @ self.X.T) @ self.y
 
     def _calc_E_in(self, w: np.ndarray = None) -> float:
         """
@@ -238,6 +238,40 @@ class LinearModel(BaseModel):
             except e:
                 raise ValueError(f'Feature transform failed\n{e}')
         return self._classify(x, w)
+
+    def classify_all(self, X: np.ndarray, w: np.ndarray = None):
+        """
+        Classify a collection of points.
+
+        Parameters
+        ----------
+        X : numpy.ndarray
+            Points to classify
+        w : numpy.ndarray, optional
+            Weight vector for calculating E_in
+            (Default: None, uses model's weight vector)
+
+        Raises
+        ------
+        ValueError
+            If feature transformation fails.
+
+        Returns
+        -------
+        numpy.ndarray
+            Predicted labels for the points in X
+        """
+        w = w if w != None else self.w
+        if self.feat_trans != None:
+            try:
+                X = np.array([self.feat_trans(x) for x in X])
+            except e:
+                raise ValueError(f'Feature transform failed\n{e}')
+
+        pred = X @ w
+        pred[pred >= 0] = 1
+        pred[pred < 0] = -1
+        return pred
 
 
 class kNNModel(BaseModel):
@@ -441,7 +475,7 @@ class RBFModel(BaseModel):
         self.kern = kern if kern != None else self._gaussian_kernel
         self.Mu = Mu
         self.r = r
-        self.feat_trans = lambda x: self._feat_trans(x, self.Mu, self.kern)
+        self.feat_trans = self._feat_trans
         self.X = np.array([self.feat_trans(x) for x in X])
         self.w = self._calc_w_lin()
 
@@ -454,14 +488,9 @@ class RBFModel(BaseModel):
         numpy.ndarray
             The weight vector from determined by linear regression.
         """
-        n = self.X.shape[1]
         return (np.linalg.inv(self.X.T @ self.X) @ self.X.T) @ self.y
 
-    @staticmethod
-    def _feat_trans(self,
-                    x: np.ndarray,
-                    Mu: np.ndarray,
-                    kern: Callable[[float], float]):
+    def _feat_trans(self, x: np.ndarray):
         """
         RBF feature transformation function.
 
@@ -473,6 +502,8 @@ class RBFModel(BaseModel):
             Centers of the data.
         kern : Callable[[float], float]
             Kernel function of the RBF.
+        r : float, optional
+            scaling constant (default: 2).
 
         Returns
         -------
@@ -480,10 +511,40 @@ class RBFModel(BaseModel):
             The feature-transformed version of x.
         """
         z = [1]
-        for i in range(len(Mu)):
-            z.append(kern(np.linalg.norm(x - Mu[i])/self.r))
+        for i in range(len(self.Mu)):
+            z.append(self.kern(np.linalg.norm(x - self.Mu[i])/self.r))
         return np.array(z)
 
     @staticmethod
     def _gaussian_kernel(z: float) -> float:
         return math.exp((-1/2) * z**2)
+
+    def classify_all(self, X: np.ndarray):
+        """
+        Classify a collection of points.
+
+        Parameters
+        ----------
+        X : numpy.ndarray
+            Points to classify
+
+        Raises
+        ------
+        ValueError
+            If feature transformation fails.
+
+        Returns
+        -------
+        numpy.ndarray
+            Predicted labels for the points in X using weight vector w
+        """
+        if self.feat_trans != None:
+            try:
+                X = np.array([self.feat_trans(x) for x in X])
+            except e:
+                raise ValueError(f'Feature transform failed\n{e}')
+
+        pred = X @ self.w
+        pred[pred >= 0] = 1
+        pred[pred < 0] = -1
+        return pred
