@@ -4,7 +4,7 @@ from time import time
 
 import numpy as np
 
-import typing
+from typing import Callable
 
 
 class BaseModel(object):
@@ -75,7 +75,7 @@ class LinearModel(BaseModel):
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
-    feat_trans: Callable[numpy.ndarray]
+    feat_trans: Callable[[numpy.ndarray], numpy.ndarray]
         Feature transformation function on an individual point.
     w : numpy.ndarray
         Weight vector of the model.
@@ -164,7 +164,7 @@ class LinearModel(BaseModel):
             The weight vector from determined by linear regression.
         """
         n = self.X.shape[1]
-        return (np.linalg.inv((self.X.T @ self.X) +
+        return (np.linalg.pinv((self.X.T @ self.X) +
                               self.r * np.eye(n)) @ self.X.T) @ self.y
 
     def _calc_E_in(self, w: np.ndarray = None) -> float:
@@ -250,7 +250,7 @@ class kNNModel(BaseModel):
         Matrix containing data used to build the model.
     y : numpy.ndarray (1 dimensional)
         Vector containing labels for data points in X.
-    feat_trans: Callable[numpy.ndarray]
+    feat_trans: Callable[[numpy.ndarray], numpy.ndarray]
         Feature transformation function on an individual point.
     k : int
         Number of nearest neighbors to check.
@@ -384,3 +384,106 @@ class kNNModel(BaseModel):
         # classify all points
         predictions = self.classify_all(X, k)
         return np.sum(np.abs(predictions - y)/2) / len(y)
+
+
+class RBFModel(BaseModel):
+    """
+    Implementation of the linear model for classification.
+
+    Attributes
+    ----------
+    X : numpy.ndarray (2 dimensional)
+        Matrix containing data used to build the model.
+    y : numpy.ndarray (1 dimensional)
+        Vector containing labels for data points in X.
+    Mu : numpy.ndarray (2 dimensional)
+        Centers of the data
+    feat_trans: Callable[[numpy.ndarray], numpy.ndarray]
+        Feature transformation function on an individual point.
+    kernel_func: Callable[[float], float]
+        Kernel Function to be used in feature_transformation
+    w : numpy.ndarray
+        Weight vector of the model.
+    r : float
+        Scaling constant
+    """
+
+    def __init__(self,
+                 X: np.ndarray,
+                 y: np.ndarray,
+                 Mu: np.ndarray,
+                 kern: Callable[[float], float] = None,
+                 r: float = 2):
+        """
+        Create a new RBFModel.
+
+        Parameters
+        ----------
+        X : numpy.ndarray (2 dimensional)
+            Matrix containing the training data.
+        y : numpy.ndarray (1 dimensional)
+            Labels for training data.
+        Mu : numpy.ndarray (2 dimensional)
+            Centers of the data
+        kern : Callable[[float], float]
+            Kernel Function used in the feature transform (default: Gaussian).
+        r : float, optional
+            scaling constant (default: 2).
+        debug : bool, optional
+            Prints out training information if True (default: False).
+
+        Raises
+        ------
+        ValueError
+            If conditions for BaseModel are not met.
+        """
+        super().__init__(X, y)
+        self.kern = kern if kern != None else self._gaussian_kernel
+        self.Mu = Mu
+        self.r = r
+        self.feat_trans = lambda x: self._feat_trans(x, self.Mu, self.kern)
+        self.X = np.array([self.feat_trans(x) for x in X])
+        self.w = self._calc_w_lin()
+
+    def _calc_w_lin(self) -> np.ndarray:
+        """
+        Calculate w_lin, the weight vector from linear regression.
+
+        Returns
+        -------
+        numpy.ndarray
+            The weight vector from determined by linear regression.
+        """
+        n = self.X.shape[1]
+        return (np.linalg.inv(self.X.T @ self.X) @ self.X.T) @ self.y
+
+    @staticmethod
+    def _feat_trans(self,
+                    x: np.ndarray,
+                    Mu: np.ndarray,
+                    kern: Callable[[float], float]):
+        """
+        RBF feature transformation function.
+
+        Parameters
+        ----------
+        x : numpy.ndarray (1 dimensional)
+            Point to transform.
+        Mu : numpy.ndarray (2 dimensional)
+            Centers of the data.
+        kern : Callable[[float], float]
+            Kernel function of the RBF.
+
+        Returns
+        -------
+        numpy.ndarray
+            The feature-transformed version of x.
+        """
+        z = [1]
+        for i in range(len(Mu)):
+            z.append(kern(np.linalg.norm(x - Mu[i])/self.r))
+        return np.array(z)
+
+    @staticmethod
+    def _gaussian_kernel(z: float) -> float:
+        return math.exp((-1/2) * z**2)
